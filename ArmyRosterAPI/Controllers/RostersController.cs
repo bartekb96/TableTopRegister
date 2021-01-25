@@ -8,8 +8,9 @@ using Microsoft.EntityFrameworkCore;
 using ArmyRosterAPI.AccessDataBases;
 using ArmyRosterAPI.Models;
 using ArmyRosterAPI.Querys;
+using ArmyRosterAPI.Commands;
 using MediatR;
-using ArmyRosterAPI.Interfaces.Repository;
+
 
 namespace ArmyRosterAPI.Controllers
 {
@@ -17,17 +18,11 @@ namespace ArmyRosterAPI.Controllers
     [ApiController]
     public class RostersController : ControllerBase
     {
-        private readonly ArmyRosterContext _context;
-
         private readonly IMediator _mediator;
 
-        private readonly IRosterRepository _rosterRepository;
-
-        public RostersController(ArmyRosterContext context, IMediator mediator, IRosterRepository rosterRepository)
+        public RostersController(IMediator mediator)
         {
-            _context = context;
             _mediator = mediator;
-            _rosterRepository = rosterRepository;
         }
 
         /// <summary>
@@ -59,9 +54,10 @@ namespace ArmyRosterAPI.Controllers
         {
             try
             {
-                var result = await _rosterRepository.GetRosterById(id);
+                var query = new GetRosterByIdQuery(id);
+                var result = await _mediator.Send(query);
 
-                if(result != null)
+                if (result != null)
                 {
                     return Ok(result);
                 }
@@ -90,14 +86,15 @@ namespace ArmyRosterAPI.Controllers
                     return BadRequest("Wrong roster ID");
                 }
 
-                var rosterToUpdate = await _rosterRepository.GetRosterById(id);
+                var command = new UpdateExistingRosterCommand(roster, id);
+                var result = await _mediator.Send(command);
 
-                if (rosterToUpdate == null)
+                if (result == null)
                 {
                     return NotFound($"Applicant with id = {id} not found");
                 }
 
-                return await _rosterRepository.UpdateRoster(id, roster);
+                return Ok(result);
             }
             catch (Exception)
             {
@@ -115,14 +112,15 @@ namespace ArmyRosterAPI.Controllers
         {
             try
             {
+                var command = new CreateNewRosterCommand(roster);
+                var result = await _mediator.Send(command);
+
                 if (roster == null)
                 {
                     return BadRequest();
                 }
 
-                var createdRoster = await _rosterRepository.CreateRoster(roster);
-
-                return CreatedAtAction(nameof(GetRoster), new { id = createdRoster.Id }, createdRoster);
+                return CreatedAtAction(nameof(GetRoster), new { id = result.Id }, result);
             }
             catch(Exception ex)
             {
@@ -140,11 +138,12 @@ namespace ArmyRosterAPI.Controllers
         {
             try
             {
-                var result = await _rosterRepository.GetRosterById(id);
+                var command = new DeleteExistingRosterCommand(id);
+                var result = await _mediator.Send(command);
 
                 if(result != null)
                 {
-                    return Ok(await _rosterRepository.DeleteRoster(id));
+                    return Ok();
                 }
 
                 return BadRequest("Nie istnieje roster o takim Id");
